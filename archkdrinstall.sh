@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================
-# Arch Linux DevOps Installer v2.4
+# Arch Linux DevOps Installer v2.5
 # By Carlos Vázquez (2025)
 # ==============================================================
 
@@ -12,8 +12,8 @@ read -rp "Escribe 'INSTALAR' para continuar: " ACK
 [[ "${ACK:-}" == "INSTALAR" ]] || { echo "Abortado."; exit 1; }
 
 ### --- 1) Entradas del usuario ---
-read -rp "Hostname: " HOSTNAME
-read -rp "Usuario administrador: " USERNAME
+HOSTNAME="keder"
+USERNAME="car7os"
 read -rsp "Contraseña para ${USERNAME}: " USERPASS; echo
 read -rsp "Repite la contraseña: " USERPASS2; echo
 [[ "$USERPASS" == "$USERPASS2" ]] || { echo "❌ Contraseñas no coinciden"; exit 1; }
@@ -48,14 +48,6 @@ done
 umount /mnt
 
 BTRFS_OPTS="noatime,ssd,compress=zstd:3,space_cache=v2"
-
-# ✅ corregido el espacio extra
-mount -o "${BTRFS_OPTS},subvol=@ " "$ROOT_PART" /mnt 2>/dev/null || \
-mount -o "${BTRFS_OPTS},subvol=@ " "$ROOT_PART" /mnt 2>/dev/null || \
-mount -o "${BTRFS_OPTS},subvol=@ " "$ROOT_PART" /mnt
-mount -o "${BTRFS_OPTS},subvol=@ " "$ROOT_PART" /mnt
-# versión correcta:
-umount /mnt 2>/dev/null || true
 mount -o "${BTRFS_OPTS},subvol=@"/ "$ROOT_PART" /mnt
 
 mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,tmp,swap}
@@ -97,7 +89,7 @@ pacstrap -K /mnt "${BASE_PKGS[@]}" "$UCODE" "${GFX_PKGS[@]}" \
 genfstab -U /mnt >> /mnt/etc/fstab
 echo "/swap/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
 
-### --- 6) Configuración en chroot ---
+### --- 6) Configuración dentro del sistema ---
 arch-chroot /mnt /bin/bash -eux <<CHROOT
 set -euo pipefail
 HOSTNAME="$HOSTNAME"
@@ -120,7 +112,7 @@ ln -sf /usr/share/zoneinfo/America/Mexico_City /etc/localtime
 hwclock --systohc
 echo 'KEYMAP=la-latin1' > /etc/vconsole.conf
 
-# Usuarios
+# Usuario
 useradd -m -G wheel,docker -s /bin/zsh "\$USERNAME"
 echo "\$USERNAME:\$USERPASS" | chpasswd
 passwd -l root
@@ -131,26 +123,33 @@ systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable systemd-timesyncd
 systemctl enable gdm
+systemctl enable docker
+
+# 🔒 UFW: configurar backend nftables (sin IPv6)
+sed -i 's/^#Backend=auto/Backend=nftables/' /etc/ufw/ufw.conf
+echo "IPV6=no" >> /etc/default/ufw
 systemctl enable ufw
-ufw --force enable || true
+ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow ssh
-systemctl enable docker
+ufw --force enable
 
-# Loader (systemd-boot)
+# Bootloader
 bootctl --path=/boot install
 mkdir -p /boot/loader/entries
 UUID=\$(findmnt -no UUID /)
 INITRD_UCODE=""
 if pacman -Q intel-ucode >/dev/null 2>&1; then INITRD_UCODE="initrd  /intel-ucode.img"; fi
 if pacman -Q amd-ucode >/dev/null 2>&1; then INITRD_UCODE="initrd  /amd-ucode.img"; fi
+
 cat >/boot/loader/loader.conf <<EOF
 default arch
 timeout 3
 console-mode max
 editor no
 EOF
+
 cat >/boot/loader/entries/arch.conf <<EOF
 title   Arch Linux (linux-zen)
 linux   /vmlinuz-linux-zen
@@ -158,10 +157,11 @@ linux   /vmlinuz-linux-zen
 initrd  /initramfs-linux-zen.img
 options root=UUID=\$UUID rootflags=subvol=@ rw nowatchdog quiet splash
 EOF
+
 mkdir -p /boot/EFI/BOOT
 cp /usr/lib/systemd/boot/efi/systemd-bootx64.efi /boot/EFI/BOOT/BOOTX64.EFI
 
-# Paru (AUR helper)
+# AUR helper: paru
 pacman -S --noconfirm --needed base-devel
 sudo -u "\$USERNAME" bash -lc '
   cd ~
@@ -171,11 +171,12 @@ sudo -u "\$USERNAME" bash -lc '
   fi
 '
 
-# Herramientas AWS y Pulumi (desde AUR)
+# AWS DevOps stack (AUR)
 sudo -u "\$USERNAME" bash -lc '
   paru -S --noconfirm aws-cli-v2 aws-sam-cli pulumi-bin aws-vault
 '
 
 CHROOT
 
-echo "✅ Instalación completada correctamente. Puedes reiniciar ahora."
+echo "✅ Instalación completada correctamente."
+echo "Puedes ejecutar 'reboot' para iniciar tu nuevo Arch Linux DevOps 🚀"
