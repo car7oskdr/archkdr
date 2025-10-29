@@ -68,7 +68,7 @@ btrfs subvolume create /mnt/@swap
 umount /mnt
 
 BTRFS_OPTS="noatime,ssd,compress=zstd:3,space_cache=v2"
-mount -o "${BTRFS_OPTS},subvol=@ "   "$ROOT_PART" /mnt
+mount -o "${BTRFS_OPTS},subvol=@"   "$ROOT_PART" /mnt
 mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,tmp,swap}
 mount -o "${BTRFS_OPTS},subvol=@home" "$ROOT_PART" /mnt/home
 mount -o "${BTRFS_OPTS},subvol=@log"  "$ROOT_PART" /mnt/var/log
@@ -108,7 +108,7 @@ HYPR_PKGS=(hyprland waybar hyprpaper wofi grim slurp wl-clipboard \
            xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland)
 
 # Red y VPN
-NET_PKGS=(nm-connection-editor networkmanager-openvpn networkmanager-wireguard wireguard-tools openvpn)
+NET_PKGS=(nm-connection-editor networkmanager-openvpn wireguard-tools openvpn)
 
 # Terminal + dev
 DEV_PKGS=(kitty neovim unzip tar ripgrep fd nodejs npm python-pipx cmake make pkgconf)
@@ -118,7 +118,7 @@ SEC_PKGS=(ufw bluez bluez-utils ttf-fira-code ttf-jetbrains-mono \
           ttf-nerd-fonts-symbols htop fastfetch)
 
 # Docker
-DOCKER_PKGS=(docker docker-compose-plugin)
+DOCKER_PKGS=(docker docker-compose docker-buildx)
 
 pacstrap -K /mnt "${BASE_PKGS[@]}" "${KERNEL_PKGS[@]}" "$UCODE" \
               "${GFX_PKGS[@]}" "${GNOME_PKGS[@]}" "${HYPR_PKGS[@]}" \
