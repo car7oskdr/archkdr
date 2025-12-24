@@ -1,76 +1,260 @@
-    # 🧰 Arch Linux DevOps Installer (Hyprland + GNOME + AWS Ready)
+Arch Linux Laptop Installer (Base + Post-Install)
 
-    Instalador automatizado de **Arch Linux** diseñado para entornos **DevOps / Platform Engineering**.  
-    Configura un sistema completo con herramientas modernas para desarrollo, virtualización, automatización y AWS, todo listo en una sola ejecución.
+Instalador modular y reproducible de Arch Linux para laptops modernas, con separación estricta entre:
 
-    ---
+Instalación base del sistema (boot, disco, kernel, GNOME).
 
-    ## ⚠️ Advertencia
+Post-instalación de herramientas (DevOps, AUR, Python con uv, Pulumi).
 
-    > 🚨 Este script **borra completamente el disco `/dev/nvme0n1`** y realiza una instalación limpia de Arch Linux.  
-    > No lo ejecutes en un sistema con datos importantes.
+Este enfoque sigue la filosofía de Arch Linux: sistema mínimo, control total y tooling desacoplado.
 
-    ---
+🎯 Objetivos del proyecto
 
-    ## 🧩 Características principales
+Instalación limpia y repetible de Arch Linux
 
-    | Categoría | Descripción |
-    |------------|--------------|
-    | 🖥️ **Base del sistema** | Arch Linux (UEFI, GPT, Btrfs, kernel `linux-zen`) |
-    | 🔒 **Particionado** | EFI (512 MiB) + Btrfs (subvolúmenes @, @home, @log, @pkg, @tmp, @swap) + Swapfile 8 GB |
-    | ⚙️ **Gestor de arranque** | `systemd-boot` |
-    | 🧠 **Sistema de archivos** | `btrfs` con compresión zstd y subvolúmenes optimizados |
-    | 🌎 **Locales** | `es_MX.UTF-8`, `en_US.UTF-8` |
-    | 🕓 **Zona horaria** | America/Mexico_City |
-    | 🔐 **Usuarios** | Crea usuario administrador y deshabilita `root` (sudo con grupo `wheel`) |
-    | 🧱 **Shell** | `zsh` + `oh-my-zsh` + plugins (`git`, `zsh-autosuggestions`, `zsh-syntax-highlighting`) |
-    | 💻 **Entorno gráfico** | GNOME + Hyprland (Wayland) |
-    | 🧰 **Terminal** | `kitty` con ligaduras, transparencia y atajos personalizados |
-    | ✨ **Editor** | `Neovim` + `LazyVim` + `Codeium` (AI autocompletado) |
-    | 🐳 **Contenedores** | Docker + Compose v2 + soporte `buildx` |
-    | 🌐 **Red / VPN** | NetworkManager + nm-connection-editor + WireGuard + OpenVPN |
-    | 🔥 **Firewall** | `ufw` (deny in / allow out, SSH abierto) |
-    | 💬 **AUR Helper** | `paru` |
-    | 🪶 **Fuentes** | JetBrains Mono, Fira Code, Nerd Fonts Symbols |
-    | 💡 **Extras DevOps / AWS** | AWS CLI v2, Pulumi, AWS SAM, jq/yq, docker-buildx, aws-vault |
-    | 🧰 **Utilidades** | fastfetch, htop, git, curl, bluez, pipewire |
+Kernel linux-zen para mejor latencia y experiencia interactiva
 
-    ---
+Btrfs con subvolúmenes (preparado para snapshots)
 
-    ## 🏗️ Estructura general
+UEFI + systemd-boot
 
-    El script realiza las siguientes etapas:
+GNOME + GDM (Wayland)
 
-    1. **Recolección de datos del usuario** (hostname, usuario, contraseñas).  
-    2. **Formateo completo del disco** `/dev/nvme0n1` y creación de particiones EFI + Btrfs.  
-    3. **Creación de subvolúmenes Btrfs** y swapfile de 8 GB.  
-    4. **Instalación del sistema base** con `pacstrap`.  
-    5. **Configuración regional**, locales y zona horaria.  
-    6. **Creación de usuario administrador**, `sudo`, bloqueo de root.  
-    7. **Instalación del entorno gráfico** GNOME + Hyprland.  
-    8. **Configuración de terminal, shell, firewall y Docker.**  
-    9. **Instalación de herramientas DevOps/AWS.**  
-    10. **Configuración estética** (kitty.conf, hyprland.conf, waybar, wofi).  
-    11. **Creación de sesión autostart GNOME** para layouts `es` / `us`.  
-    12. **Opción Rootless Docker** (con variable `ROOTLESS_DOCKER=1`).  
-    13. **Desmontaje y fin de instalación.**
+Soporte para laptop Intel + NVIDIA híbrida
 
-    ---
+Separación clara entre:
 
-    ## 🧾 Requisitos previos
+sistema base
 
-    - Arrancar desde el **ISO oficial de Arch Linux** (UEFI mode).
-    - Conexión a Internet activa (Ethernet o Wi-Fi mediante `iwctl`).
-    - Disco `/dev/nvme0n1` disponible (todo será eliminado).
-    - Ejecución como `root` o usuario live con permisos totales.
+herramientas de usuario / DevOps
 
-    ---
+Uso de uv como gestor moderno de Python (no pip)
 
-    ## 🚀 Instalación
+Infra como código con Pulumi
 
-    ### 1️⃣ Descargar el script
-    Desde el entorno Live de Arch:
+🗂️ Estructura del repositorio
+arch-install/
+├── 01_install_arch_base.sh      # Instalación base del sistema (root)
+├── 02_post_install_tools.sh     # Tooling post-instalación (usuario)
+└── README.md
 
-    ```bash
-    curl -O https://raw.githubusercontent.com/<tu_usuario>/<tu_repo>/main/arch_autoinstall_v2.sh
-    chmod +x arch_autoinstall_v2.sh
+⚠️ Advertencias importantes
+
+❗ El script de instalación base borra COMPLETAMENTE el disco
+
+❗ Diseñado para sistemas UEFI
+
+❗ Disco por defecto: /dev/nvme0n1
+
+❗ Sin cifrado LUKS (por ahora)
+
+❗ Ejecutar solo desde el Arch ISO oficial
+
+Si necesitas LUKS, BIOS legacy, o discos distintos, el script debe ajustarse.
+
+🧱 Script 01 — Instalación base de Arch
+
+Archivo: 01_install_arch_base.sh
+Dónde se ejecuta: archiso (root)
+Qué hace:
+
+Sistema
+
+Arch Linux limpio
+
+Kernel linux-zen
+
+Firmware + SOF (audio Intel)
+
+Locales: en_US.UTF-8, es_MX.UTF-8
+
+Zona horaria: America/Mexico_City
+
+Disco
+
+GPT
+
+Particiones:
+
+EFI (512 MB)
+
+ROOT (Btrfs)
+
+Subvolúmenes Btrfs:
+
+@
+
+@home
+
+@log
+
+@pkg
+
+Compresión zstd
+
+Boot
+
+systemd-boot
+
+Microcode Intel
+
+Entrada de arranque dedicada a linux-zen
+
+Desktop
+
+GNOME + GDM
+
+Wayland por defecto
+
+Laptop / Hardware
+
+Intel audio (SOF)
+
+NVIDIA híbrida (nvidia-prime)
+
+NetworkManager
+
+PipeWire
+
+Usuario
+
+Usuario normal
+
+sudo habilitado para grupo wheel
+
+Shell por defecto: zsh
+
+👉 No instala tooling DevOps ni AUR helpers.
+
+Uso
+chmod +x 01_install_arch_base.sh
+./01_install_arch_base.sh
+
+
+Cuando termine:
+
+reboot
+
+🧰 Script 02 — Post-instalación de herramientas
+
+Archivo: 02_post_install_tools.sh
+Dónde se ejecuta: ya dentro del sistema, como usuario normal
+Usa: sudo internamente
+
+Qué instala
+Base
+
+paru (AUR helper)
+
+base-devel
+
+utilidades comunes (curl, git, etc.)
+
+Contenedores
+
+Docker
+
+Docker Compose
+
+Docker Buildx
+
+Usuario agregado al grupo docker
+
+Python moderno
+
+python (solo runtime)
+
+❌ No se usa pip como workflow
+
+✅ uv como gestor de paquetes y entornos
+
+~/.local/bin agregado correctamente al PATH (.zshrc + .zprofile)
+
+Infra / DevOps
+
+Pulumi (pulumi-bin desde AUR)
+
+Utilidades
+
+jq, yq
+
+neovim
+
+openssh
+
+herramientas de CLI comunes
+
+❌ No instala GCP ni Azure
+❌ No instala IDEs ni tooling extra innecesario
+
+Uso
+chmod +x 02_post_install_tools.sh
+./02_post_install_tools.sh
+
+
+Después:
+
+Cierra sesión y vuelve a entrar (grupo docker)
+
+O abre una nueva terminal para cargar el PATH
+
+✅ Verificaciones recomendadas
+uname -r
+# debe mostrar: *zen*
+
+uv --version
+pulumi version
+
+docker run hello-world
+
+🧠 Filosofía del diseño
+
+Instalador base ≠ entorno de trabajo
+
+El sistema debe:
+
+arrancar
+
+ser estable
+
+ser mínimo
+
+El tooling:
+
+es intercambiable
+
+se puede reinstalar
+
+no debe romper el sistema base
+
+Este diseño permite:
+
+reinstalar Arch en minutos
+
+reutilizar tooling
+
+versionar cambios con control
+
+🔜 Posibles extensiones futuras
+
+(no incluidas por ahora)
+
+LUKS
+
+Snapshots Btrfs (Snapper / Timeshift)
+
+Perfil batería vs performance
+
+Hyprland opcional
+
+Hardening ligero
+
+Bootstrap por tipo de proyecto (infra / CLI / backend)
+
+🧾 Estado actual
+
+✔ Estable
+✔ Reproducible
+✔ Modular
+✔ Alineado con Arch Linux
+✔ Apto para laptop DevOps

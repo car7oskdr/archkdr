@@ -1,182 +1,114 @@
 #!/usr/bin/env bash
-# ==============================================================
-# Arch Linux DevOps Installer v2.5
-# By Carlos Vázquez (2025)
-# ==============================================================
-
 set -euo pipefail
 
-### --- 0) Confirmación inicial ---
-echo "⚠️  Este script BORRARÁ COMPLETAMENTE /dev/nvme0n1"
-read -rp "Escribe 'INSTALAR' para continuar: " ACK
-[[ "${ACK:-}" == "INSTALAR" ]] || { echo "Abortado."; exit 1; }
-
-### --- 1) Entradas del usuario ---
-HOSTNAME="keder"
-USERNAME="car7os"
-read -rsp "Contraseña para ${USERNAME}: " USERPASS; echo
-read -rsp "Repite la contraseña: " USERPASS2; echo
-[[ "$USERPASS" == "$USERPASS2" ]] || { echo "❌ Contraseñas no coinciden"; exit 1; }
-
+### ================= CONFIG =================
 DISK="/dev/nvme0n1"
-EFI_SIZE="512MiB"
-SWAP_SIZE_GB=8
-ROOTLESS_DOCKER="${ROOTLESS_DOCKER:-0}"
+EFI_SIZE="512M"
+TIMEZONE="America/Mexico_City"
+LOCALE_MAIN="en_US.UTF-8"
+LOCALE_EXTRA="es_MX.UTF-8"
+KEYMAP="la-latin1"
+KERNEL="linux-zen"
+### ==========================================
 
-### --- 2) Preparación del disco ---
-echo "🧹 Limpiando particiones anteriores en $DISK..."
-sgdisk --zap-all "$DISK"
-parted -s "$DISK" mklabel gpt \
-  mkpart ESP fat32 1MiB "$EFI_SIZE" \
-  set 1 esp on \
-  mkpart btrfs "$EFI_SIZE" 100%
-partprobe "$DISK"
-udevadm settle
-sleep 1
+echo "=== ARCH LINUX BASE INSTALL ==="
 
-EFI_PART="${DISK}p1"
-ROOT_PART="${DISK}p2"
+read -rp "Hostname: " HOSTNAME
+read -rp "Usuario: " USERNAME
+read -rsp "Password usuario: " USER_PASS; echo
+read -rsp "Confirmar password: " USER_PASS2; echo
+[[ "$USER_PASS" != "$USER_PASS2" ]] && { echo "Passwords no coinciden"; exit 1; }
 
-mkfs.fat -F32 "$EFI_PART"
-mkfs.btrfs -f "$ROOT_PART"
+timedatectl set-ntp true
+loadkeys "$KEYMAP"
 
-### --- 3) Subvolúmenes Btrfs ---
-mount "$ROOT_PART" /mnt
-for sub in @ @home @log @pkg @tmp @swap; do
-  btrfs subvolume create /mnt/$sub
-done
+### ---------- DISK ----------
+wipefs -af "$DISK"
+sgdisk -Z "$DISK"
+
+parted -s "$DISK" mklabel gpt
+parted -s "$DISK" mkpart ESP fat32 1MiB "$EFI_SIZE"
+parted -s "$DISK" set 1 esp on
+parted -s "$DISK" mkpart ROOT btrfs "$EFI_SIZE" 100%
+
+mkfs.fat -F32 "${DISK}p1"
+mkfs.btrfs -f "${DISK}p2"
+
+### ---------- BTRFS ----------
+mount "${DISK}p2" /mnt
+btrfs subvolume create /mnt/@
+btrfs subvolume create /mnt/@home
+btrfs subvolume create /mnt/@log
+btrfs subvolume create /mnt/@pkg
 umount /mnt
 
-BTRFS_OPTS="noatime,ssd,compress=zstd:3,space_cache=v2"
-mount -o "${BTRFS_OPTS},subvol=@"/ "$ROOT_PART" /mnt
+mount -o noatime,compress=zstd,subvol=@ "${DISK}p2" /mnt
+mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg}
+mount -o noatime,compress=zstd,subvol=@home "${DISK}p2" /mnt/home
+mount -o noatime,compress=zstd,subvol=@log "${DISK}p2" /mnt/var/log
+mount -o noatime,compress=zstd,subvol=@pkg "${DISK}p2" /mnt/var/cache/pacman/pkg
+mount "${DISK}p1" /mnt/boot
 
-mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,tmp,swap}
-mount -o "${BTRFS_OPTS},subvol=@home" "$ROOT_PART" /mnt/home
-mount -o "${BTRFS_OPTS},subvol=@log" "$ROOT_PART" /mnt/var/log
-mount -o "${BTRFS_OPTS},subvol=@pkg" "$ROOT_PART" /mnt/var/cache/pacman/pkg
-mount -o noatime,ssd "$ROOT_PART" /mnt/swap
-mount "$EFI_PART" /mnt/boot
-
-### --- 4) Swapfile ---
-chattr +C /mnt/swap
-btrfs property set /mnt/swap compression none || true
-fallocate -l "${SWAP_SIZE_GB}G" /mnt/swap/swapfile
-chmod 600 /mnt/swap/swapfile
-mkswap /mnt/swap/swapfile
-
-### --- 5) Instalación base ---
-echo "📦 Instalando sistema base..."
-if lscpu | grep -qi intel; then UCODE=intel-ucode; else UCODE=amd-ucode; fi
-
-BASE_PKGS=(base base-devel linux-zen linux-zen-headers linux-firmware btrfs-progs \
-            networkmanager sudo zsh git curl wget openssh man-db man-pages texinfo \
-            efibootmgr dosfstools mtools xdg-user-dirs xdg-utils pipewire pipewire-alsa \
-            pipewire-pulse wireplumber gnome-keyring jq yq)
-
-GFX_PKGS=(mesa vulkan-intel intel-media-driver libva-intel-driver)
-GNOME_PKGS=(gnome gdm gnome-tweaks)
-HYPR_PKGS=(hyprland waybar hyprpaper wofi grim slurp wl-clipboard \
-            xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland)
-NET_PKGS=(nm-connection-editor networkmanager-openvpn wireguard-tools openvpn)
-DEV_PKGS=(kitty neovim unzip tar ripgrep fd nodejs npm python-pipx cmake make pkgconf)
-SEC_PKGS=(ufw bluez bluez-utils ttf-fira-code ttf-jetbrains-mono ttf-nerd-fonts-symbols htop fastfetch)
-DOCKER_PKGS=(docker docker-compose docker-buildx)
-
-pacstrap -K /mnt "${BASE_PKGS[@]}" "$UCODE" "${GFX_PKGS[@]}" \
-              "${GNOME_PKGS[@]}" "${HYPR_PKGS[@]}" "${NET_PKGS[@]}" \
-              "${DEV_PKGS[@]}" "${SEC_PKGS[@]}" "${DOCKER_PKGS[@]}"
+### ---------- BASE SYSTEM ----------
+pacstrap -K /mnt \
+  base base-devel \
+  "$KERNEL" linux-firmware sof-firmware \
+  btrfs-progs \
+  networkmanager \
+  pipewire pipewire-pulse wireplumber \
+  intel-ucode \
+  nvidia nvidia-utils nvidia-prime \
+  gnome gdm \
+  sudo vim git curl wget \
+  zsh kitty
 
 genfstab -U /mnt >> /mnt/etc/fstab
-echo "/swap/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
 
-### --- 6) Configuración dentro del sistema ---
-arch-chroot /mnt /bin/bash -eux <<CHROOT
-set -euo pipefail
-HOSTNAME="$HOSTNAME"
-USERNAME="$USERNAME"
-USERPASS="$USERPASS"
-ROOTLESS_DOCKER="$ROOTLESS_DOCKER"
+### ---------- CHROOT ----------
+arch-chroot /mnt /bin/bash <<EOF
+set -e
 
-echo "\$HOSTNAME" > /etc/hostname
-cat >/etc/hosts <<EOF
-127.0.0.1 localhost
-::1       localhost
-127.0.1.1 \$HOSTNAME.localdomain \$HOSTNAME
-EOF
-
-sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
-sed -i 's/^#es_MX.UTF-8/es_MX.UTF-8/' /etc/locale.gen
-locale-gen
-echo 'LANG=es_MX.UTF-8' > /etc/locale.conf
-ln -sf /usr/share/zoneinfo/America/Mexico_City /etc/localtime
+ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
-echo 'KEYMAP=la-latin1' > /etc/vconsole.conf
 
-# Usuario
-useradd -m -G wheel,docker -s /bin/zsh "\$USERNAME"
-echo "\$USERNAME:\$USERPASS" | chpasswd
-passwd -l root
+sed -i "s/#$LOCALE_MAIN/$LOCALE_MAIN/" /etc/locale.gen
+sed -i "s/#$LOCALE_EXTRA/$LOCALE_EXTRA/" /etc/locale.gen
+locale-gen
+
+echo "LANG=$LOCALE_MAIN" > /etc/locale.conf
+echo "KEYMAP=$KEYMAP" > /etc/vconsole.conf
+
+echo "$HOSTNAME" > /etc/hostname
+cat > /etc/hosts <<HOSTS
+127.0.0.1 localhost
+::1 localhost
+127.0.1.1 $HOSTNAME.localdomain $HOSTNAME
+HOSTS
+
+useradd -m -G wheel -s /bin/zsh $USERNAME
+echo "$USERNAME:$USER_PASS" | chpasswd
 sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
-# Servicios
-systemctl enable NetworkManager
-systemctl enable bluetooth
-systemctl enable systemd-timesyncd
-systemctl enable gdm
-systemctl enable docker
-
-# 🔒 UFW: configurar backend nftables (sin IPv6)
-sed -i 's/^#Backend=auto/Backend=nftables/' /etc/ufw/ufw.conf
-echo "IPV6=no" >> /etc/default/ufw
-systemctl enable ufw
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw --force enable
-
-# Bootloader
-bootctl --path=/boot install
-mkdir -p /boot/loader/entries
-UUID=\$(findmnt -no UUID /)
-INITRD_UCODE=""
-if pacman -Q intel-ucode >/dev/null 2>&1; then INITRD_UCODE="initrd  /intel-ucode.img"; fi
-if pacman -Q amd-ucode >/dev/null 2>&1; then INITRD_UCODE="initrd  /amd-ucode.img"; fi
-
-cat >/boot/loader/loader.conf <<EOF
+bootctl install
+cat > /boot/loader/loader.conf <<LOADER
 default arch
 timeout 3
-console-mode max
 editor no
+LOADER
+
+cat > /boot/loader/entries/arch.conf <<ENTRY
+title Arch Linux
+linux /vmlinuz-$KERNEL
+initrd /intel-ucode.img
+initrd /initramfs-$KERNEL.img
+options root=${DISK}p2 rootflags=subvol=@ rw quiet loglevel=3
+ENTRY
+
+echo "options snd-intel-dspcfg dsp_driver=3" > /etc/modprobe.d/sof.conf
+
+systemctl enable NetworkManager gdm
+
 EOF
 
-cat >/boot/loader/entries/arch.conf <<EOF
-title   Arch Linux (linux-zen)
-linux   /vmlinuz-linux-zen
-\$INITRD_UCODE
-initrd  /initramfs-linux-zen.img
-options root=UUID=\$UUID rootflags=subvol=@ rw nowatchdog quiet splash
-EOF
-
-mkdir -p /boot/EFI/BOOT
-cp /usr/lib/systemd/boot/efi/systemd-bootx64.efi /boot/EFI/BOOT/BOOTX64.EFI
-
-# AUR helper: paru
-pacman -S --noconfirm --needed base-devel
-sudo -u "\$USERNAME" bash -lc '
-  cd ~
-  if ! command -v paru >/dev/null; then
-    git clone https://aur.archlinux.org/paru.git
-    cd paru && makepkg -si --noconfirm
-  fi
-'
-
-# AWS DevOps stack (AUR)
-sudo -u "\$USERNAME" bash -lc '
-  paru -S --noconfirm aws-cli-v2 aws-sam-cli pulumi-bin aws-vault
-'
-
-CHROOT
-
-echo "✅ Instalación completada correctamente."
-echo "Puedes ejecutar 'reboot' para iniciar tu nuevo Arch Linux DevOps 🚀"
+echo "=== BASE INSTALL COMPLETE ==="
+echo "Reboot, login as $USERNAME, then run post-install script"
