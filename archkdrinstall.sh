@@ -57,7 +57,7 @@ pacstrap -K /mnt \
   networkmanager \
   pipewire pipewire-pulse wireplumber \
   intel-ucode \
-  nvidia nvidia-utils nvidia-prime \
+  nvidia-dkms nvidia-utils nvidia-prime \
   gnome gdm \
   sudo vim git curl wget \
   zsh kitty
